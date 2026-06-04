@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HS7 Memoryspel - Begrip & Uitleg</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg,#e8f5e9,#fffde7);
+      color:#1b2a1b;
+      min-height:100vh;
+      padding:20px;
+      text-align:center;
+    }
+    h1{margin:8px 0 4px;font-size:32px;color:#19713b}
+    .subtitle{margin:0 0 18px;font-size:16px}
+    .topbar{
+      display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:18px;
+    }
+    .box{
+      background:white;border:2px solid #b7dfb9;border-radius:14px;padding:10px 16px;
+      box-shadow:0 4px 10px rgba(0,0,0,.08);font-weight:bold;
+    }
+    button{
+      border:none;border-radius:14px;padding:11px 18px;background:#19713b;color:white;
+      font-weight:bold;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.15);
+    }
+    button:hover{background:#145c30}
+    .game{
+      max-width:1050px;margin:0 auto;display:grid;
+      grid-template-columns:repeat(4,1fr);gap:14px;
+    }
+    .card{height:125px;perspective:800px;cursor:pointer}
+    .inner{position:relative;width:100%;height:100%;transition:transform .45s;transform-style:preserve-3d}
+    .card.flipped .inner,.card.matched .inner{transform:rotateY(180deg)}
+    .front,.back{
+      position:absolute;inset:0;border-radius:16px;display:flex;align-items:center;justify-content:center;
+      backface-visibility:hidden;padding:12px;box-shadow:0 5px 13px rgba(0,0,0,.18);
+    }
+    .front{background:#19713b;color:white;font-size:34px;font-weight:bold}
+    .back{background:white;border:3px solid #19713b;transform:rotateY(180deg);font-weight:bold;font-size:17px}
+    .back.term{color:#0d5c2a;background:#f1fff3}
+    .back.explain{color:#5c3b00;background:#fff9df;border-color:#d6a62e}
+    .matched .back{background:#d6ffd9;border-color:#27a844;color:#176b28}
+    .message{margin:18px auto 0;max-width:700px;font-size:18px;font-weight:bold;color:#19713b}
+    .hint{max-width:850px;margin:16px auto;color:#333;font-size:14px;background:rgba(255,255,255,.7);padding:10px;border-radius:12px}
+    @media(max-width:850px){.game{grid-template-columns:repeat(3,1fr)}.card{height:115px}.back{font-size:15px}}
+    @media(max-width:560px){.game{grid-template-columns:repeat(2,1fr)}h1{font-size:25px}.card{height:110px}.back{font-size:14px}}
+  </style>
+</head>
+<body>
+  <h1>HS7 Memoryspel</h1>
+  <p class="subtitle">Match het <b>begrip</b> met de juiste <b>uitleg</b>.</p>
+  <div class="topbar">
+    <div class="box">Pogingen: <span id="moves">0</span></div>
+    <div class="box">Matches: <span id="matches">0</span>/13</div>
+    <div class="box">Tijd: <span id="time">0</span>s</div>
+    <button onclick="restartGame()">Opnieuw starten</button>
+  </div>
+
+  <main class="game" id="game"></main>
+  <div class="message" id="message"></div>
+  <div class="hint">Tip: groene kaartjes zijn begrippen. Gele kaartjes zijn uitleg. Probeer de betekenis te onthouden voor je toets.</div>
+
+<script>
+const pairs = [
+  ["Verlicht absolutisme", "Vorst met verlichte ideeën"],
+  ["Trias politica", "Scheiding van machten"],
+  ["Abolitionisme", "Afschaffing van slavernij"],
+  ["Volkssoevereiniteit", "Macht bij het volk"],
+  ["Verlichting", "Verstand gebruiken"],
+  ["Rationalisme", "Denken met rede"],
+  ["Montesquieu", "Bedenker van trias politica"],
+  ["Voltaire", "Vrijheid van meningsuiting"],
+  ["Rousseau", "Macht ligt bij het volk"],
+  ["Encyclopédie", "Verzameling van kennis"],
+  ["Marrons", "Gevluchte slaven"],
+  ["Franse Revolutie", "Opstand tegen de koning"],
+  ["Restauratie", "Terugkeer van oude bestuurders"]
+];
+
+let cards = [];
+let flipped = [];
+let lock = false;
+let moves = 0;
+let matches = 0;
+let seconds = 0;
+let timer = null;
+
+function shuffle(array){
+  for(let i=array.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [array[i],array[j]]=[array[j],array[i]];
+  }
+  return array;
+}
+
+function startTimer(){
+  if(timer) return;
+  timer = setInterval(()=>{
+    seconds++;
+    document.getElementById('time').textContent = seconds;
+  },1000);
+}
+
+function buildCards(){
+  cards = [];
+  pairs.forEach((pair, index)=>{
+    cards.push({text: pair[0], pair:index, type:'term'});
+    cards.push({text: pair[1], pair:index, type:'explain'});
+  });
+  shuffle(cards);
+}
+
+function render(){
+  const game = document.getElementById('game');
+  game.innerHTML = '';
+  cards.forEach((card, i)=>{
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.dataset.index = i;
+    el.innerHTML = `
+      <div class="inner">
+        <div class="front">HS7</div>
+        <div class="back ${card.type}">${card.text}</div>
+      </div>`;
+    el.addEventListener('click', () => flipCard(el, card));
+    game.appendChild(el);
+  });
+}
+
+function flipCard(el, card){
+  if(lock || el.classList.contains('flipped') || el.classList.contains('matched')) return;
+  startTimer();
+  el.classList.add('flipped');
+  flipped.push({el, card});
+
+  if(flipped.length === 2){
+    moves++;
+    document.getElementById('moves').textContent = moves;
+    checkMatch();
+  }
+}
+
+function checkMatch(){
+  const [a,b] = flipped;
+  const isMatch = a.card.pair === b.card.pair && a.card.type !== b.card.type;
+  if(isMatch){
+    a.el.classList.add('matched');
+    b.el.classList.add('matched');
+    flipped = [];
+    matches++;
+    document.getElementById('matches').textContent = matches;
+    if(matches === pairs.length){
+      clearInterval(timer);
+      document.getElementById('message').textContent = `Goed gedaan! Je hebt alles gematcht in ${moves} pogingen en ${seconds} seconden.`;
+    }
+  } else {
+    lock = true;
+    setTimeout(()=>{
+      a.el.classList.remove('flipped');
+      b.el.classList.remove('flipped');
+      flipped = [];
+      lock = false;
+    },900);
+  }
+}
+
+function restartGame(){
+  clearInterval(timer);
+  timer = null;
+  flipped = [];
+  lock = false;
+  moves = 0;
+  matches = 0;
+  seconds = 0;
+  document.getElementById('moves').textContent = 0;
+  document.getElementById('matches').textContent = `0`;
+  document.getElementById('time').textContent = 0;
+  document.getElementById('message').textContent = '';
+  buildCards();
+  render();
+}
+
+restartGame();
+</script>
+</body>
+</html>
